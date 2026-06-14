@@ -49,10 +49,11 @@ export function buildTriangles() {
   let markInside = null, markBox = null;
   if (P.ind === "line") {
     const w = P.indW / 2;
-    // Keep the outer tip near the rim and grow the line inward by indLen,
-    // but never let it run into the bore.
+    // Outer tip sits near the rim; the line grows inward by indLen toward the
+    // centre. On a solid (non-through) top the line may pass over the bore
+    // roof, so length stays fully adjustable even on small knobs.
     const r2 = P.Dtop / 2 * 0.92;
-    const r1 = Math.min(r2 - 0.2, Math.max(maxInnerR() + 0.6, r2 - P.indLen));
+    const r1 = Math.max(0.4, r2 - P.indLen);
     markInside = (x, y) => x >= r1 && x <= r2 && Math.abs(y) <= w;
     markBox = [r1, r2, -w, w];
   } else if (P.ind === "dot") {
