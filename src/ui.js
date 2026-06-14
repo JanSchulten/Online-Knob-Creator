@@ -37,8 +37,8 @@ export function syncDepth() {
 // ---- Rebuild ----
 export function rebuild() {
   validate();
-  const arr = buildTriangles();
-  const g = setMesh(arr);
+  const { all, stickStart, stickDx } = buildTriangles();
+  const g = setMesh(all, stickStart, stickDx);
   frameCamera(g);
   drawGauge();
   saveState();
