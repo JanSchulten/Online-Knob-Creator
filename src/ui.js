@@ -3,6 +3,7 @@ import { isPeg, stickAllowed, maxInnerR } from "./profile.js";
 import { buildTriangles } from "./geometry.js";
 import { drawGauge } from "./gauge.js";
 import { setMesh, frameCamera } from "./renderer.js";
+import { saveState, exportJSON, importJSON } from "./storage.js";
 
 // ---- Validation ----
 export function validate() {
@@ -13,12 +14,12 @@ export function validate() {
     if (P.depth > maxRoof) {
       P.depth = Math.max(1, maxRoof);
       syncDepth();
-      msgs.push("Lochtiefe auf " + P.depth.toFixed(1) + " mm begrenzt (min. 0,6 mm Decke).");
+      msgs.push("Hole depth limited to " + P.depth.toFixed(1) + " mm (min. 0.6 mm ceiling).");
     }
   }
   const minOuter = (P.Dbot / 2) * (1 - P.fd / 100), mi = maxInnerR();
   if (mi > minOuter - 0.4) {
-    msgs.push("Aufnahme fast so breit wie der Körper unten — Wand sehr dünn. ⌀ unten vergrößern oder Aufnahme verkleinern.");
+    msgs.push("Mount almost as wide as the body bottom — wall very thin. Increase bottom Ø or shrink the mount.");
   }
   if (msgs.length) {
     warn.innerHTML = msgs.join("<br>");
@@ -40,6 +41,7 @@ export function rebuild() {
   const g = setMesh(arr);
   frameCamera(g);
   drawGauge();
+  saveState();
 }
 
 // ---- Format helpers ----
@@ -47,6 +49,29 @@ const mm   = v => v.toFixed(1) + '<span class="u">mm</span>';
 const mm2  = v => v.toFixed(2) + '<span class="u">mm</span>';
 const pct  = v => v.toFixed(0) + '<span class="u">%</span>';
 const num  = v => v.toFixed(0);
+
+// All range sliders: [inputId, P-key, labelId, formatter]
+const RANGES = [
+  ["H",        "H",         "vH",         mm ],
+  ["Dtop",     "Dtop",      "vDtop",      mm ],
+  ["Dbot",     "Dbot",      "vDbot",      mm ],
+  ["topParam", "topParam",  "vTopParam",  mm ],
+  ["Fn",       "fn",        "vFn",        num],
+  ["Fd",       "fd",        "vFd",        pct],
+  ["beak",     "beakLen",   "vBeak",      mm ],
+  ["depth",    "depth",     "vDepth",     mm ],
+  ["span",     "span",      "vSpan",      mm2],
+  ["arm",      "arm",       "vArm",       mm2],
+  ["rdia",     "rdia",      "vRdia",      mm2],
+  ["flat",     "flat",      "vFlat",      mm2],
+  ["teeth",    "teeth",     "vTeeth",     num],
+  ["ribs",     "ribs",      "vRibs",      num],
+  ["ribDepth", "ribDepth",  "vRibDepth",  mm2],
+  ["stickLen", "stickLen",  "vStickLen",  mm ],
+  ["stickSpan","stickSpan", "vStickSpan", mm2],
+  ["stickArm", "stickArm",  "vStickArm",  mm2],
+  ["stickDia", "stickDia",  "vStickDia",  mm2],
+];
 
 function bindRangeL(id, key, labId, fmt) {
   const el  = document.getElementById(id);
@@ -94,7 +119,41 @@ function setRange(id, val, labId, fmt) {
 function syncSeg(wrapId, val) {
   document.getElementById(wrapId)
     .querySelectorAll("button")
-    .forEach(x => x.classList.toggle("on", x.dataset.v === val));
+    .forEach(x => x.classList.toggle("on", x.dataset.v === String(val)));
+}
+
+// Conditional fields that depend on the top-style / pointer toggles.
+function applyTopUI() {
+  const wrap = document.getElementById("topParamWrap");
+  const lab  = document.getElementById("topParamLab");
+  if (P.top === "flat") { wrap.style.display = "none"; }
+  else { wrap.style.display = "block"; lab.textContent = P.top === "dome" ? "Dome" : "Chamfer width"; }
+}
+function applyBeakUI() {
+  document.getElementById("beakWrap").style.display = P.pointer === "on" ? "block" : "none";
+}
+function applyIndUI() {
+  document.getElementById("indModeWrap").style.display = P.ind !== "none" ? "block" : "none";
+  // Engraving only applies on a flat top — hint when it won't take effect.
+  document.getElementById("indModeNote").style.display =
+    (P.ind !== "none" && P.indMode === "engraved" && P.top !== "flat") ? "block" : "none";
+}
+
+// Push the entire P model into every control + label (used after load/import).
+export function syncAllUI() {
+  for (const [id, key, labId, fmt] of RANGES) setRange(id, P[key], labId, fmt);
+  syncSeg("topStyle", P.top);
+  syncSeg("indStyle", P.ind);
+  syncSeg("indModeSeg", P.indMode);
+  syncSeg("ptrStyle", P.pointer);
+  syncSeg("gripSeg",  P.grip);
+  syncSeg("stickSeg", P.stick);
+  syncSeg("flatsSeg", P.flats);
+  document.getElementById("mount").value = P.mount;
+  applyTopUI();
+  applyBeakUI();
+  applyIndUI();
+  applyMountUI();
 }
 
 export function applyMountUI() {
@@ -104,7 +163,7 @@ export function applyMountUI() {
   document.getElementById("flatsWrap").style.display    = P.mount === "pot_d" ? "block" : "none";
   document.getElementById("flatWrap").style.display     = (P.mount === "pot_d" && P.flats >= 1) ? "block" : "none";
   document.getElementById("teethWrap").style.display    = P.mount === "pot_spline" ? "block" : "none";
-  document.getElementById("depthLab").textContent       = isPeg() ? "Länge des Zapfens" : "Tiefe des Lochs";
+  document.getElementById("depthLab").textContent       = isPeg() ? "Peg length" : "Hole depth";
 
   const showGrip = !isPeg();
   document.getElementById("gripHead").style.display     = showGrip ? "block" : "none";
@@ -120,17 +179,17 @@ export function applyMountUI() {
 
   const note = document.getElementById("mountNote"), m = P.mount;
   if (m === "lego_hole_cross")
-    note.innerHTML = "<b>Kreuz-Loch:</b> Lego-Technic-Achse wird von unten reingesteckt. Echte Achse = 4,8/1,8 mm. Standard 4,75/2,0 = ~-0,025 mm Spiel pro Seite (FDM-Druck verengt Löcher). Klemmsitz unten für wackelfreien Halt.";
+    note.innerHTML = "<b>Cross hole:</b> a Lego Technic axle inserts from below. Real axle = 4.8/1.8 mm. Default 4.75/2.0 = ~-0.025 mm clearance per side (FDM printing narrows holes). Use the press fit below for a wobble-free hold.";
   else if (m === "lego_hole_round")
-    note.innerHTML = "<b>Rund-Loch:</b> für runden Lego-Pin (Ø 4,8). 4,9 = leichtes Spiel.";
+    note.innerHTML = "<b>Round hole:</b> for a round Lego pin (Ø 4.8). 4.9 = slight clearance.";
   else if (m === "lego_peg_cross")
-    note.innerHTML = "<b>Kreuz-Zapfen:</b> Knob steckt in ein Lego-Kreuzloch. Echte Achse = 4,8/1,8. Bei oversize-Druck 4,7/1,7 testen.";
+    note.innerHTML = "<b>Cross peg:</b> the knob plugs into a Lego cross hole. Real axle = 4.8/1.8. For oversize printing, try 4.7/1.7.";
   else if (m === "lego_peg_round")
-    note.innerHTML = "<b>Rund-Zapfen:</b> steckt in rundes Lego-Loch (Ø 4,8).";
+    note.innerHTML = "<b>Round peg:</b> plugs into a round Lego hole (Ø 4.8).";
   else if (m === "pot_d")
-    note.innerHTML = "<b>Poti rund/D:</b> direkt auf 6-mm-Potiachse. Flachseiten 1 = D-Welle, 2 = beidseitig abgeflacht.";
+    note.innerHTML = "<b>Pot round/D:</b> directly on a 6 mm pot shaft. Flats 1 = D-shaft, 2 = flattened on both sides.";
   else
-    note.innerHTML = "<b>Poti geriffelt:</b> für geriffelte 6-mm-Splined-Achsen (T18/T20).";
+    note.innerHTML = "<b>Pot splined:</b> for knurled 6 mm splined shafts (T18/T20).";
 }
 
 // ---- Presets ----
@@ -144,36 +203,12 @@ const PRESETS = {
 
 // ---- Init all UI bindings ----
 export function initUI() {
-  bindRangeL("H",         "H",         "vH",         mm);
-  bindRangeL("Dtop",      "Dtop",      "vDtop",      mm);
-  bindRangeL("Dbot",      "Dbot",      "vDbot",      mm);
-  bindRangeL("topParam",  "topParam",  "vTopParam",  mm);
-  bindRangeL("Fn",        "fn",        "vFn",        num);
-  bindRangeL("Fd",        "fd",        "vFd",        pct);
-  bindRangeL("beak",      "beakLen",   "vBeak",      mm);
-  bindRangeL("depth",     "depth",     "vDepth",     mm);
-  bindRangeL("span",      "span",      "vSpan",      mm2);
-  bindRangeL("arm",       "arm",       "vArm",       mm2);
-  bindRangeL("rdia",      "rdia",      "vRdia",      mm2);
-  bindRangeL("flat",      "flat",      "vFlat",      mm2);
-  bindRangeL("teeth",     "teeth",     "vTeeth",     num);
-  bindRangeL("ribs",      "ribs",      "vRibs",      num);
-  bindRangeL("ribDepth",  "ribDepth",  "vRibDepth",  mm2);
-  bindRangeL("stickLen",  "stickLen",  "vStickLen",  mm);
-  bindRangeL("stickSpan", "stickSpan", "vStickSpan", mm2);
-  bindRangeL("stickArm",  "stickArm",  "vStickArm",  mm2);
-  bindRangeL("stickDia",  "stickDia",  "vStickDia",  mm2);
+  for (const [id, key, labId, fmt] of RANGES) bindRangeL(id, key, labId, fmt);
 
-  bindSeg("topStyle", "top", () => {
-    const wrap = document.getElementById("topParamWrap");
-    const lab  = document.getElementById("topParamLab");
-    if (P.top === "flat") { wrap.style.display = "none"; }
-    else { wrap.style.display = "block"; lab.textContent = P.top === "dome" ? "Wölbung" : "Fasenbreite"; }
-  });
-  bindSeg("indStyle", "ind");
-  bindSeg("ptrStyle", "pointer", () => {
-    document.getElementById("beakWrap").style.display = P.pointer === "on" ? "block" : "none";
-  });
+  bindSeg("topStyle", "top", () => { applyTopUI(); applyIndUI(); });
+  bindSeg("indStyle", "ind", applyIndUI);
+  bindSeg("indModeSeg", "indMode", applyIndUI);
+  bindSeg("ptrStyle", "pointer", applyBeakUI);
   bindSeg("gripSeg", "grip", () => {
     document.getElementById("ribsWrap").style.display = (P.grip === "on" && !isPeg()) ? "block" : "none";
   });
@@ -201,18 +236,7 @@ export function initUI() {
       const pr = PRESETS[b.dataset.preset];
       if (!pr) return;
       Object.assign(P, pr);
-      setRange("H",      P.H,      "vH",      mm);
-      setRange("Dtop",   P.Dtop,   "vDtop",   mm);
-      setRange("Dbot",   P.Dbot,   "vDbot",   mm);
-      setRange("Fn",     P.fn,     "vFn",     num);
-      setRange("Fd",     P.fd,     "vFd",     pct);
-      if (P.topParam) setRange("topParam", P.topParam, "vTopParam", mm);
-      syncSeg("topStyle", P.top);
-      syncSeg("indStyle", P.ind);
-      const wrap = document.getElementById("topParamWrap");
-      const lab  = document.getElementById("topParamLab");
-      if (P.top === "flat") { wrap.style.display = "none"; }
-      else { wrap.style.display = "block"; lab.textContent = P.top === "dome" ? "Wölbung" : "Fasenbreite"; }
+      syncAllUI();
       rebuild();
     });
   });
@@ -220,5 +244,20 @@ export function initUI() {
   document.getElementById("btnExport").addEventListener("click", async () => {
     const { exportSTL } = await import("./stl.js");
     exportSTL();
+  });
+
+  // ---- Settings as JSON: save to file / load from file ----
+  document.getElementById("btnSaveJSON").addEventListener("click", exportJSON);
+
+  const fileInput = document.getElementById("fileJSON");
+  document.getElementById("btnLoadJSON").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    importJSON(f, ok => {
+      if (ok) { syncAllUI(); rebuild(); }
+      else    { alert("Konnte die JSON-Datei nicht lesen."); }
+      fileInput.value = "";
+    });
   });
 }

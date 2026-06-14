@@ -6,8 +6,13 @@ export let lastTris = null;
 
 const _target = { x: 0, y: 0, z: 0 };
 let _camR = 60, _camTheta = 0.9, _camPhi = 1.15;
+let _canvas = null;
+let _objH = 16, _objW = 16;          // last object extents, for re-fitting on resize
+let _userZoom = false;               // true once the user manually zoomed
+let _lastW = 0, _lastH = 0;
 
 export function initThree(canvas) {
+  _canvas = canvas;
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
@@ -55,12 +60,33 @@ export function setMesh(arr) {
   return g;
 }
 
+// Distance at which an object of extents (_objH × _objW) fills the viewport
+// for the given aspect ratio, leaving a small margin for orbiting.
+function fitDistance(aspect) {
+  const vFov  = camera.fov * Math.PI / 180;
+  const hFov  = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+  const distH = (_objH / 2) / Math.tan(vFov / 2);
+  const distW = (_objW / 2) / Math.tan(hFov / 2);
+  return Math.max(14, Math.max(distH, distW) * 1.15);
+}
+
+function currentAspect() {
+  return (_canvas && _canvas.clientHeight)
+    ? _canvas.clientWidth / _canvas.clientHeight
+    : (camera.aspect || 1);
+}
+
 export function frameCamera(g) {
   const ctr = new THREE.Vector3(), sz = new THREE.Vector3();
   g.boundingBox.getCenter(ctr);
   g.boundingBox.getSize(sz);
-  _target.x = ctr.x; _target.y = ctr.z; _target.z = 0;
-  _camR = Math.max(28, Math.max(sz.x, sz.y, sz.z) * 2.6);
+  // mesh is rotated -90° about X: geometry (x,y,z) -> world (x, z, -y)
+  _target.x = ctr.x; _target.y = ctr.z; _target.z = -ctr.y;
+
+  _objH = sz.z;                     // world-vertical extent
+  _objW = Math.max(sz.x, sz.y);     // world-horizontal extent
+  _userZoom = false;                // re-frame overrides any manual zoom
+  _camR = fitDistance(currentAspect());
   updateCam();
 }
 
@@ -81,6 +107,7 @@ export function orbitDelta(dx, dy) {
 }
 
 export function zoomBy(factor) {
+  _userZoom = true;
   _camR = Math.max(12, Math.min(400, _camR * factor));
   updateCam();
 }
@@ -88,9 +115,13 @@ export function zoomBy(factor) {
 export function resize(canvas) {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (w === 0 || h === 0) return;
+  if (w === _lastW && h === _lastH) return;   // only act on real size changes
+  _lastW = w; _lastH = h;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // Re-fit the object to the new viewport, unless the user zoomed manually.
+  if (!_userZoom) { _camR = fitDistance(w / h); updateCam(); }
 }
 
 export function startLoop(canvas) {

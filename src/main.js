@@ -1,18 +1,20 @@
 /* global THREE */
 import { initThree, startLoop } from "./renderer.js";
 import { initControls } from "./controls.js";
-import { initUI, applyMountUI, rebuild } from "./ui.js";
+import { initUI, syncAllUI, rebuild } from "./ui.js";
+import { loadState } from "./storage.js";
 
 const canvas = document.getElementById("view");
 
 if (typeof THREE === "undefined") {
   document.querySelector("main").innerHTML =
-    '<div style="color:#bbb;font-family:monospace;padding:40px 20px">3D-Bibliothek konnte nicht geladen werden.<br>Netzwerkeinstellungen prüfen und Seite neu laden.</div>';
+    '<div style="color:#bbb;font-family:monospace;padding:40px 20px">Could not load the 3D library.<br>Check your network settings and reload the page.</div>';
 } else {
   initThree(canvas);
   initControls(canvas);
+  loadState();      // restore last session from localStorage (if any)
   initUI();
-  applyMountUI();
+  syncAllUI();      // push restored/default values into all controls
   rebuild();
   startLoop(canvas);
 

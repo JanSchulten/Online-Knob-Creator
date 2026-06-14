@@ -42,6 +42,22 @@ export function buildTriangles() {
 
   const ringBot = makeRing(0, outerRfn(0));
 
+  // ---- position-mark footprint (shared by raised box & engraved pocket) ----
+  const markH = 0.8;
+  let markInside = null, markBox = null;
+  if (P.ind === "line") {
+    const w = Math.min(1.4, P.Dtop * 0.12) / 2;
+    const r1 = Math.max(maxInnerR() + 1, P.Dtop * 0.18), r2 = P.Dtop / 2 * 0.92;
+    markInside = (x, y) => x >= r1 && x <= r2 && Math.abs(y) <= w;
+    markBox = [r1, r2, -w, w];
+  } else if (P.ind === "dot") {
+    const r0 = P.Dtop / 2 * 0.62, w = Math.min(1.5, P.Dtop * 0.12) / 2;
+    markInside = (x, y) => Math.abs(x - r0) <= w && Math.abs(y) <= w;
+    markBox = [r0 - w, r0 + w, -w, w];
+  }
+  // Engraving is carved into the flat top; on dome/chamfer it falls back to raised.
+  const engraveFlat = (P.ind !== "none" && P.indMode === "engraved" && P.top === "flat");
+
   if (P.top === "dome") {
     const rim = makeRing(P.H, outerRfn(P.H));
     stitch(ringBot, rim, true);
@@ -68,7 +84,28 @@ export function buildTriangles() {
   } else {
     const rim = makeRing(P.H, outerRfn(P.H));
     stitch(ringBot, rim, true);
-    capFan(rim, [0, 0, P.H], true);
+    if (engraveFlat) {
+      // Flat top as a polar grid; vertices inside the mark are pushed down,
+      // forming a real recessed pocket that stays watertight.
+      const R = P.Dtop / 2;
+      const K = Math.max(6, Math.ceil(R / 0.5));   // radial steps (~0.5 mm cells)
+      const rfn = outerRfn(P.H);
+      const ringAt = frac => {
+        const r = new Array(A);
+        for (let i = 0; i < A; i++) {
+          const th = i / A * TWO, rad = rfn(th) * frac;
+          const x = rad * Math.cos(th), y = rad * Math.sin(th);
+          r[i] = [x, y, P.H - (markInside(x, y) ? markH : 0)];
+        }
+        return r;
+      };
+      let prev = ringAt(1 / K);
+      capFan(prev, [0, 0, P.H], true);
+      for (let k = 2; k < K; k++) { const ring = ringAt(k / K); annulus(ring, prev, false); prev = ring; }
+      annulus(rim, prev, false);
+    } else {
+      capFan(rim, [0, 0, P.H], true);
+    }
   }
 
   const inner0 = makeRing(0, innerRFinal);
@@ -84,8 +121,8 @@ export function buildTriangles() {
     annulus(ringBot, inner0, true);
   }
 
-  if (P.ind !== "none") {
-    const zBase = P.H, hMark = 0.8, zTop = zBase + hMark;
+  if (P.ind !== "none" && !engraveFlat) {
+    const zBase = P.H, zTop = zBase + markH;
     const box = (x0, x1, y0, y1, z0, z1) => {
       const v = [
         [x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],
@@ -94,14 +131,7 @@ export function buildTriangles() {
       const f = [[0,1,2],[0,2,3],[4,6,5],[4,7,6],[0,5,1],[0,4,5],[1,5,6],[1,6,2],[2,6,7],[2,7,3],[3,7,4],[3,4,0]];
       for (const t of f) push(v[t[0]], v[t[1]], v[t[2]]);
     };
-    if (P.ind === "line") {
-      const w = Math.min(1.4, P.Dtop * 0.12) / 2;
-      const r1 = Math.max(maxInnerR() + 1, P.Dtop * 0.18), r2 = P.Dtop / 2 * 0.92;
-      box(r1, r2, -w, w, zBase - 0.2, zTop);
-    } else {
-      const r0 = P.Dtop / 2 * 0.62, w = Math.min(1.5, P.Dtop * 0.12) / 2;
-      box(r0 - w, r0 + w, -w, w, zBase - 0.2, zTop);
-    }
+    box(markBox[0], markBox[1], markBox[2], markBox[3], zBase - 0.2, zTop);
   }
 
   if (stickEnabled()) {

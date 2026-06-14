@@ -57,26 +57,26 @@ export function drawGauge() {
   if (P.mount.includes("cross")) {
     const dSpan = P.span - LEGO_SPAN, dArm = P.arm - LEGO_ARM;
     if (isPeg()) {
-      ft.innerHTML = "Zapfen vs. Lego-Loch (4,8): Tip <b>" + dSpan.toFixed(2) + "</b>, Arm <b>" + dArm.toFixed(2) + "</b> mm";
+      ft.innerHTML = "Peg vs. Lego hole (4.8): Tip <b>" + dSpan.toFixed(2) + "</b>, Arm <b>" + dArm.toFixed(2) + "</b> mm";
       ft.style.color = (P.span <= 4.8 && P.arm <= 1.8) ? "#7fd6a4" : "#e0a36a";
     } else {
-      ft.innerHTML = "Spiel zur Achse: Tip <b>" + (dSpan / 2).toFixed(2) + "</b>, Arm <b>" + (dArm / 2).toFixed(2) + "</b> mm/Seite";
+      ft.innerHTML = "Clearance to axle: Tip <b>" + (dSpan / 2).toFixed(2) + "</b>, Arm <b>" + (dArm / 2).toFixed(2) + "</b> mm/side";
       ft.style.color = (dSpan >= 0.05 && dArm >= 0.05) ? "#7fd6a4" : "#e0a36a";
     }
   } else if (P.mount.includes("round")) {
     ft.innerHTML = isPeg()
-      ? "Rund-Zapfen Ø <b>" + P.rdia.toFixed(2) + "</b> (Lego-Loch 4,8)"
-      : "Rund-Loch Ø <b>" + P.rdia.toFixed(2) + "</b> (Lego-Pin 4,8)";
+      ? "Round peg Ø <b>" + P.rdia.toFixed(2) + "</b> (Lego hole 4.8)"
+      : "Round hole Ø <b>" + P.rdia.toFixed(2) + "</b> (Lego pin 4.8)";
     ft.style.color = "#9aa3ad";
   } else {
-    ft.innerHTML = "Poti-Aufnahme Ø <b>" + P.rdia.toFixed(2) + "</b> · Flachseiten " + (P.mount === "pot_d" ? P.flats : 0);
+    ft.innerHTML = "Pot mount Ø <b>" + P.rdia.toFixed(2) + "</b> · Flats " + (P.mount === "pot_d" ? P.flats : 0);
     ft.style.color = "#9aa3ad";
   }
 
   if (stickEnabled()) {
     const extra = P.mount === "lego_hole_cross"
-      ? "Stift→Loch Spiel: " + ((P.span - P.stickSpan) / 2).toFixed(2) + " / " + ((P.arm - P.stickArm) / 2).toFixed(2) + " mm"
-      : "Stift→Loch Spiel: " + ((P.rdia - P.stickDia) / 2).toFixed(2) + " mm";
+      ? "Stick→hole clearance: " + ((P.span - P.stickSpan) / 2).toFixed(2) + " / " + ((P.arm - P.stickArm) / 2).toFixed(2) + " mm"
+      : "Stick→hole clearance: " + ((P.rdia - P.stickDia) / 2).toFixed(2) + " mm";
     ft.innerHTML += '<br><span style="color:#7fd6a4">' + extra + "</span>";
   }
 }
