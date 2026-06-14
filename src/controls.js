@@ -1,4 +1,4 @@
-import { orbitDelta, zoomBy } from "./renderer.js";
+import { orbitDelta, zoomBy, reframe } from "./renderer.js";
 
 export function initControls(canvas) {
   // Track active pointers for multi-touch detection
@@ -62,6 +62,9 @@ export function initControls(canvas) {
     e.preventDefault();
     zoomBy(1 + Math.sign(e.deltaY) * 0.08);
   }, { passive: false });
+
+  // Double-click / double-tap re-fits the object to the viewport
+  canvas.addEventListener("dblclick", e => { e.preventDefault(); reframe(); });
 
   // Prevent context menu on long-press (mobile)
   canvas.addEventListener("contextmenu", e => e.preventDefault());

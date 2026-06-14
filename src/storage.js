@@ -26,6 +26,10 @@ export function loadState() {
   } catch { return false; }
 }
 
+export function clearState() {
+  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+}
+
 // ---- JSON file (manual export / import) ----
 export function exportJSON() {
   const blob = new Blob([JSON.stringify(P, null, 2)], { type: "application/json" });

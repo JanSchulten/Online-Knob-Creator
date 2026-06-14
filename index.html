@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#16181D" />
-<title>KNOB.WORKS — Parametric Knob Designer</title>
+<title>Knob Generator — Parametric Knob Designer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   :root {
@@ -195,6 +195,27 @@
   .field .lab .val { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
   .field .lab .val .u { color: var(--line); font-weight: 400; margin-left: 2px; }
 
+  /* Editable numeric value input */
+  .valnum {
+    width: 58px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    color: var(--ink);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 2px 4px;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .valnum:hover { border-color: var(--ink-2); }
+  .valnum:focus { outline: none; border-color: var(--accent); background: #fff; }
+  .valnum::-webkit-outer-spin-button,
+  .valnum::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
   /* ── Range sliders ── */
   input[type=range] {
     -webkit-appearance: none;
@@ -378,6 +399,52 @@
   .vp-tag.bl { bottom: 12px; left: 14px; color: #454b53; }
   .vp-tag.br { bottom: 12px; right: 14px; color: #454b53; text-align: right; }
 
+  /* ── Blueprint toggle button (in viewport) ── */
+  .vp-btn {
+    position: absolute;
+    top: 34px;
+    left: 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    background: rgba(20, 22, 27, .7);
+    color: #9fb6d0;
+    border: 1px solid #2c3a4e;
+    border-radius: 3px;
+    padding: 7px 11px;
+    min-height: 32px;
+    cursor: pointer;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    touch-action: manipulation;
+    transition: background .1s, color .1s, border-color .1s;
+  }
+  .vp-btn:hover { border-color: #43597a; color: #cfe3ff; }
+  .vp-btn.on    { background: #bcd8ff; color: #0a2440; border-color: #bcd8ff; font-weight: 700; }
+
+  /* ── Blueprint dimension overlay (SVG) ── */
+  .dims {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .dims .dl { stroke: #6fb4ff; stroke-width: 1; }
+  .dims .dp { fill: #6fb4ff; }
+  .dims .dt {
+    fill: #eaf2ff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    paint-order: stroke;
+    stroke: #0a2440;
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+
   /* ── Gauge ── */
   .gauge {
     position: absolute;
@@ -448,7 +515,7 @@
     .readout { display: none; }
     /* readout normally pushes the buttons right; it's hidden on mobile, so
        hand that job to the first header button */
-    header #btnSaveJSON { margin-left: auto; }
+    header #btnReset { margin-left: auto; }
 
     body[data-tab="view"] aside { display: none; }
     body[data-tab="ctrl"] main  { display: none; }
@@ -461,6 +528,7 @@
     .seg button   { padding: 13px 4px; font-size: 13px; min-height: 48px; }
     select        { padding: 13px 10px; font-size: 16px; }
     .field .lab   { font-size: 13px; }
+    .valnum       { font-size: 16px; width: 70px; padding: 4px 6px; }
 
     .gauge { width: 140px; top: 10px; right: 10px; }
     #gaugeCanvas  { width: 120px; height: 120px; }
@@ -508,12 +576,13 @@
 <body data-tab="view">
 <div id="app">
   <header>
-    <div class="brand">KNOB<b>.</b>WORKS <span class="sub">// Lego-Technic ↔ Synth Knob</span></div>
+    <div class="brand">Knob<b>.</b>Generator <span class="sub">// Lego-Technic ↔ Synth Knob</span></div>
     <div class="readout">
       <div>Ø top <b id="roTop">—</b><span class="unit"> mm</span></div>
       <div>Height <b id="roH">—</b><span class="unit"> mm</span></div>
       <div>Triangles <b id="roTris">—</b></div>
     </div>
+    <button class="hbtn" id="btnReset">Reset</button>
     <button class="hbtn" id="btnSaveJSON">Save</button>
     <button class="hbtn" id="btnLoadJSON">Load</button>
     <input type="file" id="fileJSON" accept="application/json,.json" hidden>
@@ -634,9 +703,17 @@
             </optgroup>
           </select>
         </div>
-        <div class="field">
+        <div class="field" id="depthField">
           <div class="lab"><span id="depthLab">Hole depth</span><span class="val" id="vDepth">8.0<span class="u">mm</span></span></div>
           <input type="range" id="depth" min="2" max="24" step="0.5" value="8">
+        </div>
+        <div class="field" id="throughWrap">
+          <div class="lab"><span>Through-hole</span></div>
+          <div class="seg" id="throughSeg">
+            <button data-v="off" class="on">Off</button>
+            <button data-v="on">Through</button>
+          </div>
+          <div class="note" id="throughNote" style="display:none;">Through-hole uses a <b>flat</b> open top — set the top to Flat for a clean result.</div>
         </div>
 
         <div id="crossParams">
@@ -730,8 +807,9 @@
 
   <main>
     <canvas id="view"></canvas>
+    <button id="btnBlueprint" class="vp-btn">Blueprint</button>
     <div class="vp-tag tl">3D PREVIEW · mm · Z = up</div>
-    <div class="vp-tag bl">Drag = rotate · Scroll/Pinch = zoom</div>
+    <div class="vp-tag bl">Drag = rotate · Scroll/Pinch = zoom · Double-click = fit</div>
     <div class="vp-tag br" id="bboxTag">—</div>
     <div class="gauge">
       <h3>Mount cross-section</h3>

@@ -55,10 +55,20 @@ export function buildTriangles() {
     markInside = (x, y) => Math.abs(x - r0) <= w && Math.abs(y) <= w;
     markBox = [r0 - w, r0 + w, -w, w];
   }
-  // Engraving is carved into the flat top; on dome/chamfer it falls back to raised.
-  const engraveFlat = (P.ind !== "none" && P.indMode === "engraved" && P.top === "flat");
+  // Through-hole: the bore runs the full height and is open at the top too,
+  // so a stick/axle can pass all the way through. Only for hole-type mounts.
+  const through = (P.through === "on" && !isPeg());
+  // Engraving is carved into the flat top; on dome/chamfer or a through-hole
+  // (whose top is an open ring) it falls back to a raised mark.
+  const engraveFlat = (P.ind !== "none" && P.indMode === "engraved" && P.top === "flat" && !through);
 
-  if (P.top === "dome") {
+  if (through) {
+    // Flat ring on top: outer wall up to the rim, then an annulus down to the bore.
+    const rim = makeRing(P.H, outerRfn(P.H));
+    stitch(ringBot, rim, true);
+    const innerTopRing = makeRing(P.H, innerRFinal);
+    annulus(rim, innerTopRing, false);
+  } else if (P.top === "dome") {
     const rim = makeRing(P.H, outerRfn(P.H));
     stitch(ringBot, rim, true);
     const steps = 10, domeH = P.topParam;
@@ -113,6 +123,11 @@ export function buildTriangles() {
     const L = P.depth, innerBot = makeRing(-L, innerRFinal);
     stitch(innerBot, inner0, true);
     capFan(innerBot, [0, 0, -L], false);
+    annulus(ringBot, inner0, true);
+  } else if (through) {
+    // Open bore the full height; top ring already closed the top annulus.
+    const innerTop = makeRing(P.H, innerRFinal);
+    stitch(inner0, innerTop, false);
     annulus(ringBot, inner0, true);
   } else {
     const d = P.depth, innerTop = makeRing(d, innerRFinal);

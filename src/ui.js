@@ -1,15 +1,15 @@
-import { P } from "./params.js";
+import { P, DEFAULTS } from "./params.js";
 import { isPeg, stickAllowed, maxInnerR } from "./profile.js";
 import { buildTriangles } from "./geometry.js";
 import { drawGauge } from "./gauge.js";
-import { setMesh, frameCamera } from "./renderer.js";
-import { saveState, exportJSON, importJSON } from "./storage.js";
+import { setMesh, frameCamera, toggleBlueprint } from "./renderer.js";
+import { saveState, clearState, exportJSON, importJSON } from "./storage.js";
 
 // ---- Validation ----
 export function validate() {
   const warn = document.getElementById("warnBox");
   const msgs = [];
-  if (!isPeg()) {
+  if (!isPeg() && P.through !== "on") {
     const maxRoof = P.H - 0.6;
     if (P.depth > maxRoof) {
       P.depth = Math.max(1, maxRoof);
@@ -30,16 +30,17 @@ export function validate() {
 }
 
 export function syncDepth() {
-  document.getElementById("depth").value = P.depth;
-  document.getElementById("vDepth").innerHTML = P.depth.toFixed(1) + '<span class="u">mm</span>';
+  setRange("depth", P.depth, "vDepth", mm);
 }
 
 // ---- Rebuild ----
-export function rebuild() {
+// refit=true re-fits the camera zoom (initial/preset/load/reset/mount change);
+// the default keeps the user's current zoom while editing values.
+export function rebuild(refit = false) {
   validate();
   const { all, stickStart, stickDx } = buildTriangles();
   const g = setMesh(all, stickStart, stickDx);
-  frameCamera(g);
+  frameCamera(g, refit);
   drawGauge();
   saveState();
 }
@@ -49,6 +50,14 @@ const mm   = v => v.toFixed(1) + '<span class="u">mm</span>';
 const mm2  = v => v.toFixed(2) + '<span class="u">mm</span>';
 const pct  = v => v.toFixed(0) + '<span class="u">%</span>';
 const num  = v => v.toFixed(0);
+
+// Decimal precision + unit per formatter, for the editable number inputs.
+const FMT_META = new Map([
+  [mm,  { prec: 1, unit: "mm" }],
+  [mm2, { prec: 2, unit: "mm" }],
+  [pct, { prec: 0, unit: "%"  }],
+  [num, { prec: 0, unit: ""   }],
+]);
 
 // All range sliders: [inputId, P-key, labelId, formatter]
 const RANGES = [
@@ -74,13 +83,44 @@ const RANGES = [
 ];
 
 function bindRangeL(id, key, labId, fmt) {
-  const el  = document.getElementById(id);
-  const lab = document.getElementById(labId);
+  const el   = document.getElementById(id);
+  const lab  = document.getElementById(labId);
+  const meta = FMT_META.get(fmt) || { prec: 2, unit: "" };
+
+  // Replace the static value display with an editable number input + unit,
+  // so values can be typed precisely (this is a measuring tool).
+  const numEl = document.createElement("input");
+  numEl.type = "number";
+  numEl.className = "valnum";
+  numEl.id = "n" + id;
+  numEl.min = el.min; numEl.max = el.max; numEl.step = el.step;
+  numEl.inputMode = "decimal";
+  numEl.value = (+P[key]).toFixed(meta.prec);
+  lab.textContent = "";
+  lab.appendChild(numEl);
+  if (meta.unit) {
+    const u = document.createElement("span");
+    u.className = "u"; u.textContent = meta.unit;
+    lab.appendChild(u);
+  }
+
   el.addEventListener("input", () => {
     P[key] = parseFloat(el.value);
-    if (lab) lab.innerHTML = fmt(P[key]);
+    numEl.value = (+P[key]).toFixed(meta.prec);
     rebuild();
   });
+
+  const commit = () => {
+    let v = parseFloat(numEl.value);
+    if (isNaN(v)) { numEl.value = (+P[key]).toFixed(meta.prec); return; }
+    v = Math.min(parseFloat(el.max), Math.max(parseFloat(el.min), v));
+    P[key] = v;
+    el.value = v;
+    numEl.value = (+v).toFixed(meta.prec);
+    rebuild();
+  };
+  numEl.addEventListener("change", commit);
+  numEl.addEventListener("keydown", e => { if (e.key === "Enter") numEl.blur(); });
 }
 
 function bindSeg(wrapId, key, cb) {
@@ -112,8 +152,11 @@ function bindSegNum(wrapId, key, cb) {
 function setRange(id, val, labId, fmt) {
   const el = document.getElementById(id);
   el.value = val;
-  const l = document.getElementById(labId);
-  if (l) l.innerHTML = fmt(val);
+  const numEl = document.getElementById("n" + id);
+  if (numEl) {
+    const meta = FMT_META.get(fmt) || { prec: 2 };
+    numEl.value = (+val).toFixed(meta.prec);
+  }
 }
 
 function syncSeg(wrapId, val) {
@@ -148,6 +191,7 @@ export function syncAllUI() {
   syncSeg("ptrStyle", P.pointer);
   syncSeg("gripSeg",  P.grip);
   syncSeg("stickSeg", P.stick);
+  syncSeg("throughSeg", P.through);
   syncSeg("flatsSeg", P.flats);
   document.getElementById("mount").value = P.mount;
   applyTopUI();
@@ -164,6 +208,12 @@ export function applyMountUI() {
   document.getElementById("flatWrap").style.display     = (P.mount === "pot_d" && P.flats >= 1) ? "block" : "none";
   document.getElementById("teethWrap").style.display    = P.mount === "pot_spline" ? "block" : "none";
   document.getElementById("depthLab").textContent       = isPeg() ? "Peg length" : "Hole depth";
+
+  // Through-hole: only for hole-type mounts; it makes the depth slider moot.
+  const through = (P.through === "on" && !isPeg());
+  document.getElementById("throughWrap").style.display  = isPeg() ? "none" : "block";
+  document.getElementById("depthField").style.display   = (isPeg() || !through) ? "block" : "none";
+  document.getElementById("throughNote").style.display  = (through && P.top !== "flat") ? "block" : "none";
 
   const showGrip = !isPeg();
   document.getElementById("gripHead").style.display     = showGrip ? "block" : "none";
@@ -209,6 +259,7 @@ export function initUI() {
   bindSeg("indStyle", "ind", applyIndUI);
   bindSeg("indModeSeg", "indMode", applyIndUI);
   bindSeg("ptrStyle", "pointer", applyBeakUI);
+  bindSeg("throughSeg", "through", applyMountUI);
   bindSeg("gripSeg", "grip", () => {
     document.getElementById("ribsWrap").style.display = (P.grip === "on" && !isPeg()) ? "block" : "none";
   });
@@ -228,7 +279,7 @@ export function initUI() {
     if (P.mount === "lego_peg_round")  { P.rdia = 4.8;  setRange("rdia", 4.8, "vRdia", mm2); }
     if (P.mount === "pot_d")           { P.rdia = 6.2; P.flats = 1; P.flat = 0.8; setRange("rdia", 6.2, "vRdia", mm2); setRange("flat", 0.8, "vFlat", mm2); document.getElementById("flatsSeg").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.v === "1")); }
     if (P.mount === "pot_spline")      { P.rdia = 6.3; P.teeth = 20; setRange("rdia", 6.3, "vRdia", mm2); setRange("teeth", 20, "vTeeth", num); }
-    applyMountUI(); rebuild();
+    applyMountUI(); rebuild(true);
   });
 
   document.getElementById("presets").querySelectorAll("button").forEach(b => {
@@ -237,13 +288,33 @@ export function initUI() {
       if (!pr) return;
       Object.assign(P, pr);
       syncAllUI();
-      rebuild();
+      rebuild(true);
     });
   });
 
   document.getElementById("btnExport").addEventListener("click", async () => {
     const { exportSTL } = await import("./stl.js");
     exportSTL();
+  });
+
+  // ---- Blueprint view toggle ----
+  const bpBtn = document.getElementById("btnBlueprint");
+  let bpOn = false;
+  bpBtn.addEventListener("click", () => {
+    bpOn = !bpOn;
+    bpBtn.classList.toggle("on", bpOn);
+    toggleBlueprint(bpOn);
+  });
+  // Allow opening straight into blueprint view via #blueprint.
+  if (location.hash.toLowerCase().includes("blueprint")) bpBtn.click();
+
+  // ---- Reset to defaults ----
+  document.getElementById("btnReset").addEventListener("click", () => {
+    if (!confirm("Reset all settings to defaults?")) return;
+    clearState();
+    Object.assign(P, DEFAULTS);
+    syncAllUI();
+    rebuild(true);
   });
 
   // ---- Settings as JSON: save to file / load from file ----
@@ -255,8 +326,8 @@ export function initUI() {
     const f = fileInput.files[0];
     if (!f) return;
     importJSON(f, ok => {
-      if (ok) { syncAllUI(); rebuild(); }
-      else    { alert("Konnte die JSON-Datei nicht lesen."); }
+      if (ok) { syncAllUI(); rebuild(true); }
+      else    { alert("Could not read the JSON file."); }
       fileInput.value = "";
     });
   });
