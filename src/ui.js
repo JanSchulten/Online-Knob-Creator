@@ -67,6 +67,9 @@ const RANGES = [
   ["topParam", "topParam",  "vTopParam",  mm ],
   ["Fn",       "fn",        "vFn",        num],
   ["Fd",       "fd",        "vFd",        pct],
+  ["indW",     "indW",      "vIndW",      mm ],
+  ["indLen",   "indLen",    "vIndLen",    mm ],
+  ["indH",     "indH",      "vIndH",      mm ],
   ["beak",     "beakLen",   "vBeak",      mm ],
   ["depth",    "depth",     "vDepth",     mm ],
   ["span",     "span",      "vSpan",      mm2],
@@ -176,10 +179,14 @@ function applyBeakUI() {
   document.getElementById("beakWrap").style.display = P.pointer === "on" ? "block" : "none";
 }
 function applyIndUI() {
-  document.getElementById("indModeWrap").style.display = P.ind !== "none" ? "block" : "none";
+  const has = P.ind !== "none";
+  document.getElementById("indModeWrap").style.display = has ? "block" : "none";
+  document.getElementById("indSizeWrap").style.display = has ? "block" : "none";
+  // Length only matters for the line mark; the dot is sized by width alone.
+  document.getElementById("indLenWrap").style.display = (P.ind === "line") ? "block" : "none";
   // Engraving only applies on a flat top — hint when it won't take effect.
   document.getElementById("indModeNote").style.display =
-    (P.ind !== "none" && P.indMode === "engraved" && P.top !== "flat") ? "block" : "none";
+    (has && P.indMode === "engraved" && P.top !== "flat") ? "block" : "none";
 }
 
 // Push the entire P model into every control + label (used after load/import).

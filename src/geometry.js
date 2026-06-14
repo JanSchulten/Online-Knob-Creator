@@ -43,15 +43,20 @@ export function buildTriangles() {
   const ringBot = makeRing(0, outerRfn(0));
 
   // ---- position-mark footprint (shared by raised box & engraved pocket) ----
-  const markH = 0.8;
+  // Size is user-controlled: indW = width, indLen = radial length (line only),
+  // indH = raised height / engraved depth.
+  const markH = P.indH;
   let markInside = null, markBox = null;
   if (P.ind === "line") {
-    const w = Math.min(1.4, P.Dtop * 0.12) / 2;
-    const r1 = Math.max(maxInnerR() + 1, P.Dtop * 0.18), r2 = P.Dtop / 2 * 0.92;
+    const w = P.indW / 2;
+    // Keep the outer tip near the rim and grow the line inward by indLen,
+    // but never let it run into the bore.
+    const r2 = P.Dtop / 2 * 0.92;
+    const r1 = Math.min(r2 - 0.2, Math.max(maxInnerR() + 0.6, r2 - P.indLen));
     markInside = (x, y) => x >= r1 && x <= r2 && Math.abs(y) <= w;
     markBox = [r1, r2, -w, w];
   } else if (P.ind === "dot") {
-    const r0 = P.Dtop / 2 * 0.62, w = Math.min(1.5, P.Dtop * 0.12) / 2;
+    const r0 = P.Dtop / 2 * 0.62, w = P.indW / 2;
     markInside = (x, y) => Math.abs(x - r0) <= w && Math.abs(y) <= w;
     markBox = [r0 - w, r0 + w, -w, w];
   }
