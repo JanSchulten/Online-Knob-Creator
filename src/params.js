@@ -1,6 +1,9 @@
 export const LEGO_SPAN = 4.8;
 export const LEGO_ARM  = 1.8;
-export const A = 196; // angular resolution
+
+// Reduce geometry segments on mobile to cut CPU/memory load
+const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+export const A = isMobileDevice ? 96 : 196;
 
 export const P = {
   H: 14, Dtop: 14, Dbot: 16, top: "flat", topParam: 2,

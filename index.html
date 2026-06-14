@@ -49,9 +49,8 @@
     display: grid;
     grid-template-columns: 360px 1fr;
     grid-template-rows: auto 1fr;
-    /* 100dvh collapses correctly when iOS Safari chrome appears/disappears */
-    height: 100dvh;
-    height: 100vh; /* fallback for older browsers */
+    height: 100vh;   /* fallback */
+    height: 100dvh;  /* collapses correctly when iOS Safari chrome appears/disappears */
     padding-top:   var(--safe-top);
     padding-left:  var(--safe-left);
     padding-right: var(--safe-right);

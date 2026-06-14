@@ -6,10 +6,19 @@ export let lastTris = null;
 
 const _target = { x: 0, y: 0, z: 0 };
 let _camR = 60, _camTheta = 0.9, _camPhi = 1.15;
+let _loopActive = false;
+
+// iOS/mobile: reduce GPU memory to prevent WebGL context loss
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 export function initThree(canvas) {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: !isMobile,           // MSAA doubles GPU memory — skip on mobile
+    powerPreference: isMobile ? "low-power" : "default",
+  });
+  // iOS kills WebGL at ~300 MB; cap pixel ratio to stay well below that
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x15171c);
@@ -32,6 +41,16 @@ export function initThree(canvas) {
   mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
   mesh.rotation.x = -Math.PI / 2;
   scene.add(mesh);
+
+  // Gracefully handle iOS killing the WebGL context under memory pressure
+  canvas.addEventListener("webglcontextlost", e => {
+    e.preventDefault();
+    _loopActive = false;
+  }, false);
+
+  canvas.addEventListener("webglcontextrestored", () => {
+    _loopActive = true;
+  }, false);
 }
 
 export function setMesh(arr) {
@@ -85,18 +104,23 @@ export function zoomBy(factor) {
   updateCam();
 }
 
+let _lastW = 0, _lastH = 0;
 export function resize(canvas) {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (w === 0 || h === 0) return;
+  if (w === 0 || h === 0 || (w === _lastW && h === _lastH)) return;
+  _lastW = w; _lastH = h;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 
 export function startLoop(canvas) {
+  _loopActive = true;
   function loop() {
-    resize(canvas);
-    renderer.render(scene, camera);
+    if (_loopActive) {
+      resize(canvas);
+      renderer.render(scene, camera);
+    }
     requestAnimationFrame(loop);
   }
   loop();
