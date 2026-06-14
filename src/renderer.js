@@ -92,7 +92,7 @@ function fitDistance(aspect) {
   const hFov  = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
   const distH = (_objH / 2) / Math.tan(vFov / 2);
   const distW = (_objW / 2) / Math.tan(hFov / 2);
-  return Math.max(14, Math.max(distH, distW) * 1.15);
+  return Math.max(14, Math.max(distH, distW) * 1.25);
 }
 
 function currentAspect() {
