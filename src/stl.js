@@ -1,15 +1,12 @@
 import { P } from "./params.js";
-import { lastTris } from "./renderer.js";
+import { lastTris, lastStickStart, lastStickDx } from "./renderer.js";
 
-export function exportSTL() {
-  const v = lastTris;
-  if (!v) return;
+function serializeSTL(v, header) {
   const n = v.length / 9;
   const buf = new ArrayBuffer(84 + n * 50);
   const dv  = new DataView(buf);
 
-  const hdr = "KNOB.WORKS parametric knob - mm - binary STL";
-  for (let i = 0; i < 80; i++) dv.setUint8(i, i < hdr.length ? hdr.charCodeAt(i) : 0);
+  for (let i = 0; i < 80; i++) dv.setUint8(i, i < header.length ? header.charCodeAt(i) : 0);
   dv.setUint32(80, n, true);
 
   let o = 84;
@@ -31,12 +28,48 @@ export function exportSTL() {
     o += 50;
   }
 
-  const blob = new Blob([buf], { type: "application/octet-stream" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
+  return new Blob([buf], { type: "application/octet-stream" });
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement("a");
   a.href = url;
-  a.download = "knob_" + P.mount + "_" + P.Dtop.toFixed(0) + "x" + P.H.toFixed(0) + ".stl";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
+}
+
+export function exportSTL() {
+  const v = lastTris;
+  if (!v) return;
+
+  const baseName = "knob_" + P.mount + "_" + P.Dtop.toFixed(0) + "x" + P.H.toFixed(0);
+
+  if (lastStickStart !== null) {
+    // Knob-only triangles
+    const knobBlob = serializeSTL(
+      v.subarray(0, lastStickStart),
+      "KNOB.WORKS parametric knob - mm - binary STL"
+    );
+    triggerDownload(knobBlob, baseName + ".stl");
+
+    // Stick triangles centered at origin (subtract x-offset)
+    const stickRaw = v.subarray(lastStickStart);
+    const stickCentered = new Float32Array(stickRaw.length);
+    for (let i = 0; i < stickRaw.length; i++) {
+      stickCentered[i] = (i % 3 === 0) ? stickRaw[i] - lastStickDx : stickRaw[i];
+    }
+    const stickBlob = serializeSTL(
+      stickCentered,
+      "KNOB.WORKS stick - mm - binary STL"
+    );
+    setTimeout(() => triggerDownload(stickBlob, baseName + "_stick.stl"), 300);
+  } else {
+    triggerDownload(
+      serializeSTL(v, "KNOB.WORKS parametric knob - mm - binary STL"),
+      baseName + ".stl"
+    );
+  }
 }

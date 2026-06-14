@@ -134,10 +134,14 @@ export function buildTriangles() {
     box(markBox[0], markBox[1], markBox[2], markBox[3], zBase - 0.2, zTop);
   }
 
+  let stickStart = null;
+  let stickDx = 0;
   if (stickEnabled()) {
+    stickStart = tris.length;
     const L = P.stickLen, mr = stickMaxR();
     const knobR = Math.max(P.Dtop, P.Dbot) / 2 + (P.pointer === "on" ? P.beakLen : 0);
-    const dx = knobR + mr + 5;
+    stickDx = knobR + mr + 5;
+    const dx = stickDx;
     const ch = Math.min(0.6, L * 0.2);
     const ringOff = (z, rf) => {
       const r = new Array(A);
@@ -155,5 +159,5 @@ export function buildTriangles() {
     capFan(t0, [dx, 0, L], true);
   }
 
-  return new Float32Array(tris);
+  return { all: new Float32Array(tris), stickStart, stickDx };
 }

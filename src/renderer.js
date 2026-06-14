@@ -3,6 +3,8 @@ import { P } from "./params.js";
 
 export let renderer, scene, camera, mesh, mat;
 export let lastTris = null;
+export let lastStickStart = null;
+export let lastStickDx = 0;
 
 const _target = { x: 0, y: 0, z: 0 };
 let _camR = 60, _camTheta = 0.9, _camPhi = 1.15;
@@ -39,8 +41,10 @@ export function initThree(canvas) {
   scene.add(mesh);
 }
 
-export function setMesh(arr) {
+export function setMesh(arr, stickStart, stickDx) {
   lastTris = arr;
+  lastStickStart = stickStart ?? null;
+  lastStickDx = stickDx ?? 0;
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
   g.computeVertexNormals();
