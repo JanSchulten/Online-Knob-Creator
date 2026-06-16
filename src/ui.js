@@ -179,7 +179,7 @@ export function applyMountUI() {
 
   const note = document.getElementById("mountNote"), m = P.mount;
   if (m === "lego_hole_cross")
-    note.innerHTML = "<b>Cross hole:</b> a Lego Technic axle inserts from below. Real axle = 4.8/1.8 mm. Default 4.75/2.0 = ~-0.025 mm clearance per side (FDM printing narrows holes). Use the press fit below for a wobble-free hold.";
+    note.innerHTML = "";
   else if (m === "lego_hole_round")
     note.innerHTML = "<b>Round hole:</b> for a round Lego pin (Ø 4.8). 4.9 = slight clearance.";
   else if (m === "lego_peg_cross")
@@ -231,14 +231,12 @@ export function initUI() {
     applyMountUI(); rebuild();
   });
 
-  document.getElementById("presets").querySelectorAll("button").forEach(b => {
-    b.addEventListener("click", () => {
-      const pr = PRESETS[b.dataset.preset];
-      if (!pr) return;
-      Object.assign(P, pr);
-      syncAllUI();
-      rebuild();
-    });
+  document.getElementById("presets").addEventListener("change", e => {
+    const pr = PRESETS[e.target.value];
+    if (!pr) return;
+    Object.assign(P, pr);
+    syncAllUI();
+    rebuild();
   });
 
   document.getElementById("btnExport").addEventListener("click", async () => {
