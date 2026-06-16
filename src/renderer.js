@@ -1,5 +1,6 @@
 /* global THREE */
 import { P } from "./params.js";
+import { initBlueprint, updateBlueprint, setBlueprintOverlay } from "./blueprint.js";
 
 export let renderer, scene, camera, mesh, mat;
 export let lastTris = null;
@@ -12,6 +13,9 @@ let _canvas = null;
 let _objH = 16, _objW = 16;          // last object extents, for re-fitting on resize
 let _userZoom = false;               // true once the user manually zoomed
 let _lastW = 0, _lastH = 0;
+let _blueprint = false;
+let _grid = null;
+const BG_DEFAULT = 0x15171c, BG_BLUEPRINT = 0x0a2440;
 
 export function initThree(canvas) {
   _canvas = canvas;
@@ -30,7 +34,8 @@ export function initThree(canvas) {
   const d3 = new THREE.DirectionalLight(0x8fb6ff, 0.25);
   d3.position.set(0.2, -1, 0.6); scene.add(d3);
 
-  scene.add(new THREE.GridHelper(120, 60, 0x2a3340, 0x20262e));
+  _grid = new THREE.GridHelper(120, 60, 0x2a3340, 0x20262e);
+  scene.add(_grid);
 
   mat = new THREE.MeshStandardMaterial({
     color: 0xff4a1c, metalness: 0.12, roughness: 0.55,
@@ -39,6 +44,22 @@ export function initThree(canvas) {
   mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
   mesh.rotation.x = -Math.PI / 2;
   scene.add(mesh);
+
+  initBlueprint(canvas);
+}
+
+// Blueprint mode: navy background, light wireframe model, dimension overlay.
+export function toggleBlueprint(viewOn) {
+  _blueprint = viewOn;
+  scene.background = new THREE.Color(viewOn ? BG_BLUEPRINT : BG_DEFAULT);
+  // Solid muted-blue model (not wireframe — the dimension overlay sits on top
+  // and a dense fluted wireframe would just be visual noise).
+  mat.color.set(viewOn ? 0x3f608f : 0xff4a1c);
+  mat.metalness = viewOn ? 0.0 : 0.12;
+  mat.roughness = viewOn ? 0.85 : 0.55;
+  mat.wireframe = false;
+  if (_grid) _grid.visible = !viewOn;
+  setBlueprintOverlay(viewOn);
 }
 
 export function setMesh(arr, stickStart, stickDx) {
@@ -71,7 +92,7 @@ function fitDistance(aspect) {
   const hFov  = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
   const distH = (_objH / 2) / Math.tan(vFov / 2);
   const distW = (_objW / 2) / Math.tan(hFov / 2);
-  return Math.max(14, Math.max(distH, distW) * 1.15);
+  return Math.max(14, Math.max(distH, distW) * 1.25);
 }
 
 function currentAspect() {
@@ -80,7 +101,10 @@ function currentAspect() {
     : (camera.aspect || 1);
 }
 
-export function frameCamera(g) {
+// refit=true re-fits the zoom distance (initial load, presets, reset, mount
+// change). refit=false only tracks the object's bounds/center so editing
+// values keeps the user's current zoom instead of snapping back every time.
+export function frameCamera(g, refit = false) {
   const ctr = new THREE.Vector3(), sz = new THREE.Vector3();
   g.boundingBox.getCenter(ctr);
   g.boundingBox.getSize(sz);
@@ -89,7 +113,13 @@ export function frameCamera(g) {
 
   _objH = sz.z;                     // world-vertical extent
   _objW = Math.max(sz.x, sz.y);     // world-horizontal extent
-  _userZoom = false;                // re-frame overrides any manual zoom
+  if (refit) { _userZoom = false; _camR = fitDistance(currentAspect()); }
+  updateCam();
+}
+
+// Re-fit the current object to the viewport (used by double-click).
+export function reframe() {
+  _userZoom = false;
   _camR = fitDistance(currentAspect());
   updateCam();
 }
@@ -132,6 +162,7 @@ export function startLoop(canvas) {
   function loop() {
     resize(canvas);
     renderer.render(scene, camera);
+    if (_blueprint) updateBlueprint(camera, canvas);
     requestAnimationFrame(loop);
   }
   loop();

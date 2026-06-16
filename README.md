@@ -1,4 +1,4 @@
-# KNOB.WORKS — Online Knob Creator
+# Knob Generator — Online Knob Creator
 
 🎛️ **Live demo:** [janschulten.github.io/Online-Knob-Creator](https://janschulten.github.io/Online-Knob-Creator/)
 

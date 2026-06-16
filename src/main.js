@@ -15,7 +15,7 @@ if (typeof THREE === "undefined") {
   loadState();      // restore last session from localStorage (if any)
   initUI();
   syncAllUI();      // push restored/default values into all controls
-  rebuild();
+  rebuild(true);    // initial build frames the camera
   startLoop(canvas);
 
   // Mobile tab bar

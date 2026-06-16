@@ -43,22 +43,38 @@ export function buildTriangles() {
   const ringBot = makeRing(0, outerRfn(0));
 
   // ---- position-mark footprint (shared by raised box & engraved pocket) ----
-  const markH = 0.8;
+  // Size is user-controlled: indW = width, indLen = radial length (line only),
+  // indH = raised height / engraved depth.
+  const markH = P.indH;
   let markInside = null, markBox = null;
   if (P.ind === "line") {
-    const w = Math.min(1.4, P.Dtop * 0.12) / 2;
-    const r1 = Math.max(maxInnerR() + 1, P.Dtop * 0.18), r2 = P.Dtop / 2 * 0.92;
+    const w = P.indW / 2;
+    // Outer tip sits near the rim; the line grows inward by indLen toward the
+    // centre. On a solid (non-through) top the line may pass over the bore
+    // roof, so length stays fully adjustable even on small knobs.
+    const r2 = P.Dtop / 2 * 0.92;
+    const r1 = Math.max(0.4, r2 - P.indLen);
     markInside = (x, y) => x >= r1 && x <= r2 && Math.abs(y) <= w;
     markBox = [r1, r2, -w, w];
   } else if (P.ind === "dot") {
-    const r0 = P.Dtop / 2 * 0.62, w = Math.min(1.5, P.Dtop * 0.12) / 2;
+    const r0 = P.Dtop / 2 * 0.62, w = P.indW / 2;
     markInside = (x, y) => Math.abs(x - r0) <= w && Math.abs(y) <= w;
     markBox = [r0 - w, r0 + w, -w, w];
   }
-  // Engraving is carved into the flat top; on dome/chamfer it falls back to raised.
-  const engraveFlat = (P.ind !== "none" && P.indMode === "engraved" && P.top === "flat");
+  // Through-hole: the bore runs the full height and is open at the top too,
+  // so a stick/axle can pass all the way through. Only for hole-type mounts.
+  const through = (P.through === "on" && !isPeg());
+  // Engraving is carved into the flat top; on dome/chamfer or a through-hole
+  // (whose top is an open ring) it falls back to a raised mark.
+  const engraveFlat = (P.ind !== "none" && P.indMode === "engraved" && P.top === "flat" && !through);
 
-  if (P.top === "dome") {
+  if (through) {
+    // Flat ring on top: outer wall up to the rim, then an annulus down to the bore.
+    const rim = makeRing(P.H, outerRfn(P.H));
+    stitch(ringBot, rim, true);
+    const innerTopRing = makeRing(P.H, innerRFinal);
+    annulus(rim, innerTopRing, false);
+  } else if (P.top === "dome") {
     const rim = makeRing(P.H, outerRfn(P.H));
     stitch(ringBot, rim, true);
     const steps = 10, domeH = P.topParam;
@@ -113,6 +129,11 @@ export function buildTriangles() {
     const L = P.depth, innerBot = makeRing(-L, innerRFinal);
     stitch(innerBot, inner0, true);
     capFan(innerBot, [0, 0, -L], false);
+    annulus(ringBot, inner0, true);
+  } else if (through) {
+    // Open bore the full height; top ring already closed the top annulus.
+    const innerTop = makeRing(P.H, innerRFinal);
+    stitch(inner0, innerTop, false);
     annulus(ringBot, inner0, true);
   } else {
     const d = P.depth, innerTop = makeRing(d, innerRFinal);

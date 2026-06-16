@@ -51,7 +51,7 @@ export function exportSTL() {
     // Knob-only triangles
     const knobBlob = serializeSTL(
       v.subarray(0, lastStickStart),
-      "KNOB.WORKS parametric knob - mm - binary STL"
+      "Knob Generator parametric knob - mm - binary STL"
     );
     triggerDownload(knobBlob, baseName + ".stl");
 
@@ -63,12 +63,12 @@ export function exportSTL() {
     }
     const stickBlob = serializeSTL(
       stickCentered,
-      "KNOB.WORKS stick - mm - binary STL"
+      "Knob Generator stick - mm - binary STL"
     );
     setTimeout(() => triggerDownload(stickBlob, baseName + "_stick.stl"), 300);
   } else {
     triggerDownload(
-      serializeSTL(v, "KNOB.WORKS parametric knob - mm - binary STL"),
+      serializeSTL(v, "Knob Generator parametric knob - mm - binary STL"),
       baseName + ".stl"
     );
   }
